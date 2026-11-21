@@ -13,9 +13,11 @@ import {
 } from "../shared/seedInvoices";
 import {
   analyzeAndNegotiateWithAI,
+  buildInvoiceRecord,
   buildStandardOffers,
   draftScheduledFollowupWithAI,
   extractInvoiceFromRawText,
+  type InvoiceFields,
   type WorkersAIBinding
 } from "./ai";
 
@@ -49,6 +51,21 @@ async function syncInvoiceToPortfolio(env: Env, invoice: InvoiceSummary): Promis
   } catch {
     // Non-blocking sync
   }
+}
+
+/** Creates a DebtorAgent for a new invoice and registers it with the PortfolioHub. */
+async function spawnDebtorAgent(
+  env: Env,
+  record: { summary: InvoiceSummary; vaultDocs: VaultDocument[]; initialAgentEmail: string; modelBadge: string }
+): Promise<Response> {
+  const agentStub = env.DebtorAgent.get(env.DebtorAgent.idFromName(record.summary.id));
+  await agentStub.fetch("https://internal/init", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(record)
+  });
+  await syncInvoiceToPortfolio(env, record.summary);
+  return Response.json(record, { status: 201 });
 }
 
 /**
@@ -137,7 +154,7 @@ export class DebtorAgent extends Agent<Env, DebtorAgentState> {
     const firstMsg: ThreadMessage = {
       id: uid("msg"),
       sender: "agent",
-      authorName: "Consigliere AR Agent",
+      authorName: "Collectible",
       body: initialAgentEmail,
       createdAt: now,
       intentDetected: "initial_outreach",
@@ -356,7 +373,7 @@ export class DebtorAgent extends Agent<Env, DebtorAgentState> {
     const followupMsg: ThreadMessage = {
       id: uid("msg"),
       sender: "agent",
-      authorName: "Consigliere AR Agent (Autonomous Wake-Up)",
+      authorName: "Collectible (scheduled follow-up)",
       body,
       createdAt: now,
       settlementOptions: offers,
@@ -490,8 +507,8 @@ export class DebtorAgent extends Agent<Env, DebtorAgentState> {
       id: uid("msg"),
       sender: "agent",
       authorName: plan.haltForDispute
-        ? "Consigliere Safety Escalation"
-        : "Consigliere AR Agent",
+        ? "Collectible (paused for your review)"
+        : "Collectible",
       body: plan.replyBody,
       createdAt: t1 + 4,
       intentDetected: plan.classification.intent,
@@ -562,7 +579,7 @@ export class DebtorAgent extends Agent<Env, DebtorAgentState> {
     const msg: ThreadMessage = {
       id: uid("msg"),
       sender: "agent",
-      authorName: "Finance Controller + Consigliere Agent",
+      authorName: "Your finance team via Collectible",
       body:
         cfoNote?.trim() ||
         `Hi ${this.state.invoice.debtorContact.split(" ")[0]} — Our Finance Controller reviewed the inspection note and approved a ${fmtUsd(cleanCredit)} credit memo against ${this.state.invoice.invoiceNumber}. You can close the adjusted ${fmtUsd(adjustedBalance)} balance in full right below.`,
@@ -627,7 +644,7 @@ export class DebtorAgent extends Agent<Env, DebtorAgentState> {
       id: uid("msg"),
       sender: "system",
       authorName: "Direct ACH Remittance Gateway",
-      body: `SETTLED: ${this.state.invoice.debtorCompany} authorized "${chosen.label}" — ${fmtUsd(chosen.totalSettledAmount)} routed directly to client operating account (Trace #${traceNum}). Zero funds custodied by Consigliere.`,
+      body: `SETTLED: ${this.state.invoice.debtorCompany} authorized "${chosen.label}" — ${fmtUsd(chosen.totalSettledAmount)} routed directly to client operating account (Trace #${traceNum}). Collectible never holds your funds.`,
       createdAt: now
     };
     this.insertMessage(sysMsg);
@@ -638,7 +655,7 @@ export class DebtorAgent extends Agent<Env, DebtorAgentState> {
       createdAt: now,
       stage: "settled",
       title: `Invoice Settled (${fmtUsd(chosen.totalSettledAmount)}) — Trace #${traceNum}`,
-      detail: `Client recovered ${fmtUsd(chosen.totalSettledAmount)} (saved ${fmtUsd(roundCents(chosen.totalSettledAmount * 0.22))} vs 30% collection agency). Consigliere auto-billed 8% contingency fee (${fmtUsd(feeEarned)}).`,
+      detail: `Client recovered ${fmtUsd(chosen.totalSettledAmount)} (saved ${fmtUsd(roundCents(chosen.totalSettledAmount * 0.22))} vs 30% collection agency). Collectible fee (8%) (${fmtUsd(feeEarned)}).`,
       badge: `+${fmtUsd(feeEarned)} Profit`,
       severity: "success"
     });
@@ -671,7 +688,7 @@ export class DebtorAgent extends Agent<Env, DebtorAgentState> {
 
 /**
  * Company-wide Portfolio Coordinator Agent.
- * Tracks all overdue invoices in SQLite, computes live recovered cash & Consigliere net fees,
+ * Tracks all overdue invoices in SQLite, computes live recovered cash & Collectible fees,
  * and pushes live updates to all connected dashboard clients over WebSockets.
  */
 export class PortfolioHub extends Agent<Env, PortfolioState> {
@@ -717,7 +734,7 @@ export class PortfolioHub extends Agent<Env, PortfolioState> {
     );
     const platformMonthlyFee = 499;
     const contingencyFeePct = 8;
-    const consigliereRevenueEarned = roundCents(
+    const platformFeesEarned = roundCents(
       platformMonthlyFee + totalRecoveredForClient * (contingencyFeePct / 100)
     );
 
@@ -729,7 +746,7 @@ export class PortfolioHub extends Agent<Env, PortfolioState> {
       invoices,
       totalOverduePool,
       totalRecoveredForClient,
-      consigliereRevenueEarned,
+      platformFeesEarned,
       lastUpdatedAt: Date.now()
     };
 
@@ -791,24 +808,39 @@ export default {
     if (url.pathname === "/api/invoices/extract" && request.method === "POST") {
       const { rawText } = (await request.json()) as { rawText: string };
       const extracted = await extractInvoiceFromRawText(env.AI, rawText || "");
+      return spawnDebtorAgent(env, extracted);
+    }
 
-      // Spawn and initialize the new DebtorAgent Durable Object
-      const agentStub = env.DebtorAgent.get(env.DebtorAgent.idFromName(extracted.summary.id));
-      await agentStub.fetch("https://internal/init", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(extracted)
-      });
-
-      // Register in PortfolioHub
-      const hub = env.PortfolioHub.get(env.PortfolioHub.idFromName("main"));
-      await hub.fetch("https://internal/upsert-invoice", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ invoice: extracted.summary })
-      });
-
-      return Response.json(extracted, { status: 201 });
+    // Structured create from the "Add invoice" form (no AI parsing needed)
+    if (url.pathname === "/api/invoices" && request.method === "POST") {
+      const body = (await request.json()) as Partial<InvoiceFields>;
+      const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+      const amount = Number(body.amount);
+      const daysOverdue = Math.round(Number(body.daysOverdue));
+      const missing: string[] = [];
+      if (!str(body.debtorCompany)) missing.push("customer company");
+      if (!str(body.debtorContact)) missing.push("contact name");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str(body.debtorEmail))) missing.push("a valid email");
+      if (!str(body.invoiceNumber)) missing.push("invoice number");
+      if (!(amount > 0)) missing.push("an amount above $0");
+      if (!(daysOverdue >= 1)) missing.push("days overdue");
+      if (missing.length) {
+        return Response.json({ error: `Please enter ${missing.join(", ")}.` }, { status: 400 });
+      }
+      const record = buildInvoiceRecord(
+        {
+          debtorCompany: str(body.debtorCompany),
+          debtorContact: str(body.debtorContact),
+          debtorEmail: str(body.debtorEmail),
+          invoiceNumber: str(body.invoiceNumber),
+          amount,
+          daysOverdue,
+          poNumber: str(body.poNumber),
+          lineItemsSummary: str(body.lineItemsSummary)
+        },
+        "Added manually"
+      );
+      return spawnDebtorAgent(env, record);
     }
 
     if (url.pathname === "/api/demo/reset" && request.method === "POST") {

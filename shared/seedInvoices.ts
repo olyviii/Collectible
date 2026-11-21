@@ -107,7 +107,7 @@ export interface PortfolioState {
   invoices: InvoiceSummary[];
   totalOverduePool: number;
   totalRecoveredForClient: number;
-  consigliereRevenueEarned: number;
+  platformFeesEarned: number;
   lastUpdatedAt: number;
 }
 
