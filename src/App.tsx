@@ -28,6 +28,10 @@ import { ExtractInvoiceModal } from "./components/ExtractInvoiceModal";
 
 type ActiveTab = "overview" | "receivables";
 
+// When the site is hosted somewhere other than the Worker (e.g. Vercel), live agent
+// WebSockets connect straight to the Cloudflare Worker. /api calls go through rewrites.
+const AGENT_HOST: string | undefined = import.meta.env.VITE_AGENT_HOST || undefined;
+
 /* ---------- helpers ---------- */
 
 function fmtUsd(n: number): string {
@@ -153,6 +157,7 @@ export default function App() {
   useAgent<PortfolioState>({
     agent: "portfolio-hub",
     name: "main",
+    host: AGENT_HOST,
     onOpen: () => setWsConnected(true),
     onClose: () => setWsConnected(false),
     onStateUpdate: (nextState) => {
@@ -164,6 +169,7 @@ export default function App() {
   useAgent<DebtorAgentState>({
     agent: "debtor-agent",
     name: selectedId,
+    host: AGENT_HOST,
     onOpen: () => setWsConnected(true),
     onStateUpdate: (nextState) => {
       if (nextState?.initialized) {
