@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    font-family: "Barlow", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "tnum" 1;
+    color: #0f2233;
+    background-color: #f4f6f5;
+  }
+
+  body {
+    margin: 0;
+    background-color: #f4f6f5;
+    color: #0f2233;
+  }
+}
+
+.font-condensed {
+  font-family: "Barlow Semi Condensed", "Barlow", ui-sans-serif, sans-serif;
+  letter-spacing: 0.06em;
+}
+
+.font-mono-num {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
