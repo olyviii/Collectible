@@ -17,28 +17,3 @@ US small & mid-sized B2B businesses have **$3.1 Trillion** trapped in 30–120 d
 4. **Safety Circuit Breaker:** Quality or legal disputes immediately freeze automated emails and trigger a live WebSocket escalation card for 1-click CFO credit memo resolution.
 5. **Non-Custodial Direct ACH:** Funds flow directly from debtor to the client's operating bank account (zero money-transmitter licenses required). Consigliere bills **$499/mo + 8% contingency** on recovered 60+ day invoices.
 
----
-
-## Quick Start (Local Development)
-
-```bash
-cd consigliere-ar
-npm install
-npm run dev
-```
-
-Open **http://localhost:8787** to launch the full app (React SPA + Cloudflare Worker + Stateful Durable Object Agents).
-
-> **Want live Cloudflare GPU inference during local dev?** Run `npx wrangler login` once, then run `npx wrangler dev --remote`.
-
----
-
-## Deploy Live to Cloudflare (`*.workers.dev` URL in Seconds)
-
-```bash
-cd consigliere-ar
-npx wrangler login
-npm run deploy
-```
-
-Wrangler builds `./dist`, provisions your SQLite-backed `DebtorAgent` and `PortfolioHub` Durable Objects, binds **Workers AI (`env.AI`)** automatically with **no API keys**, and outputs your public live prototype URL!
