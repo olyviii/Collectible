@@ -705,6 +705,49 @@ export async function extractInvoiceFromRawText(
     }
   }
 
+  return buildInvoiceRecord(
+    {
+      debtorCompany: company,
+      debtorContact: contact,
+      debtorEmail: email,
+      invoiceNumber,
+      amount,
+      daysOverdue,
+      poNumber,
+      industry,
+      lineItemsSummary: lineItems
+    },
+    modelBadge
+  );
+}
+
+export interface InvoiceFields {
+  debtorCompany: string;
+  debtorContact: string;
+  debtorEmail: string;
+  invoiceNumber: string;
+  amount: number;
+  daysOverdue: number;
+  poNumber: string;
+  industry?: string;
+  lineItemsSummary: string;
+}
+
+/** Turns invoice fields into a full DebtorAgent seed record (summary, vault docs, first email). */
+export function buildInvoiceRecord(
+  fields: InvoiceFields,
+  modelBadge: string
+): { summary: InvoiceSummary; vaultDocs: VaultDocument[]; initialAgentEmail: string; modelBadge: string } {
+  const company = fields.debtorCompany.trim();
+  const contact = fields.debtorContact;
+  const email = fields.debtorEmail.trim();
+  const invoiceNumber = fields.invoiceNumber.trim();
+  const amount = fields.amount;
+  const daysOverdue = fields.daysOverdue;
+  const poNumber = fields.poNumber.trim() || "N/A";
+  const industry = fields.industry?.trim() || "General B2B";
+  const lineItems = fields.lineItemsSummary.trim() || "goods and services delivered";
+
   const slug =
     company
       .toLowerCase()

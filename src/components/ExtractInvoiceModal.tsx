@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FileText, Sparkles, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { InvoiceSummary } from "../../shared/seedInvoices";
 
 interface Props {
@@ -8,121 +8,183 @@ interface Props {
   onCreated: (invoice: InvoiceSummary) => void;
 }
 
-const SAMPLE_PASTES = [
-  {
-    label: "Messy Forwarded Invoice Email",
-    text: `Forwarded from billing:
-Client: Northstar Commercial Roofing
-Contact: Greg Halvorsen (ghalvorsen@northstarroof-demo.com)
-Invoice INV-2026-5092 — $21,600.00 — 78 days overdue!
-PO: PO-NR-4419
-Items: 18 pallets TPO Membrane Rolls & Insulated Fastener Plates delivered to Bensenville yard.`
-  },
-  {
-    label: "Raw Aging ERP CSV Row",
-    text: `Beacon Precision Machining, Sandra Lin, slin@beaconcnc-demo.com, INV-2026-5144, $15,750, 66 days past due, PO-8820-BC, 5-Axis Coolant Filtration Units & Carbide Inserts`
-  }
-];
+type FormState = {
+  debtorCompany: string;
+  debtorContact: string;
+  debtorEmail: string;
+  invoiceNumber: string;
+  poNumber: string;
+  amount: string;
+  daysOverdue: string;
+  lineItemsSummary: string;
+};
+
+const EMPTY: FormState = {
+  debtorCompany: "",
+  debtorContact: "",
+  debtorEmail: "",
+  invoiceNumber: "",
+  poNumber: "",
+  amount: "",
+  daysOverdue: "",
+  lineItemsSummary: ""
+};
+
+const SAMPLE: FormState = {
+  debtorCompany: "Northstar Commercial Roofing",
+  debtorContact: "Greg Halvorsen",
+  debtorEmail: "ghalvorsen@northstarroof-demo.com",
+  invoiceNumber: "INV-2026-5092",
+  poNumber: "PO-NR-4419",
+  amount: "21600",
+  daysOverdue: "78",
+  lineItemsSummary: "18 pallets of TPO membrane rolls and insulated fastener plates"
+};
+
+function Field({
+  label,
+  hint,
+  children,
+  className = ""
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`block ${className}`}>
+      <span className="mb-1.5 block text-sm font-medium text-neutral-800">
+        {label}
+        {hint && <span className="ml-1 font-normal text-neutral-400">{hint}</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+const inputCls =
+  "w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900";
 
 export function ExtractInvoiceModal({ open, onClose, onCreated }: Props) {
-  const [rawText, setRawText] = useState(SAMPLE_PASTES[0].text);
+  const [form, setForm] = useState<FormState>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
 
-  async function handleExtract(e: React.FormEvent) {
+  const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  function close() {
+    setError(null);
+    onClose();
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!rawText.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/invoices/extract", {
+      const res = await fetch("/api/invoices", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ rawText })
+        body: JSON.stringify({
+          ...form,
+          amount: Number(form.amount),
+          daysOverdue: Number(form.daysOverdue)
+        })
       });
-      if (!res.ok) throw new Error(`Extraction failed (${res.status})`);
-      const data = (await res.json()) as { summary: InvoiceSummary };
+      const data = (await res.json()) as { summary?: InvoiceSummary; error?: string };
+      if (!res.ok || !data.summary) throw new Error(data.error || `Could not add invoice (${res.status})`);
       onCreated(data.summary);
-      onClose();
+      setForm(EMPTY);
+      close();
     } catch (err: any) {
-      setError(err?.message || "Failed to extract invoice");
+      setError(err?.message || "Could not add invoice");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f2233]/60 p-4 backdrop-blur-[1px]">
-      <div className="w-full max-w-xl rounded border border-[#b4c1c8] bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#d5dde1] bg-[#0f2233] px-5 py-3.5 text-white">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-[#fbbf24]" />
-            <span className="font-condensed text-sm font-semibold uppercase">
-              Workers AI Unstructured Invoice Ingestion
-            </span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between bg-[#111111] px-6 py-4 text-white">
+          <div>
+            <div className="font-display text-xl font-medium">Add an overdue invoice</div>
+            <div className="mt-0.5 text-sm text-white/60">
+              Collectible will email the customer and follow up for you.
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-slate-300 hover:bg-white/10 hover:text-white"
-          >
+          <button onClick={close} className="rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <form onSubmit={handleExtract} className="p-5 space-y-4">
-          <p className="text-sm text-[#3c4c57]">
-            Paste any raw overdue invoice text, forwarded billing email, or ERP aging row.{" "}
-            <strong className="text-[#0f2233]">Workers AI (`llama-3.3-70b-instruct-fp8-fast`)</strong>{" "}
-            extracts structured JSON via schema mode and spawns a dedicated stateful{" "}
-            <code className="rounded bg-[#ebf1f8] px-1.5 py-0.5 text-xs text-[#26496e]">DebtorAgent</code>{" "}
-            Durable Object.
-          </p>
-
-          <div className="flex flex-wrap gap-2">
-            {SAMPLE_PASTES.map((s) => (
+        <form onSubmit={handleSubmit} className="space-y-6 p-6">
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Customer</h3>
               <button
-                key={s.label}
                 type="button"
-                onClick={() => setRawText(s.text)}
-                className="inline-flex items-center gap-1.5 rounded border border-[#b4c1c8] bg-[#f4f6f7] px-2.5 py-1 text-xs font-medium text-[#0f2233] hover:bg-[#ebf1f8]"
+                onClick={() => setForm(SAMPLE)}
+                className="text-xs text-neutral-500 underline-offset-2 hover:text-neutral-900 hover:underline"
               >
-                <FileText className="h-3.5 w-3.5 text-[#3a6ea5]" />
-                Load Sample: {s.label}
+                Fill with sample
               </button>
-            ))}
-          </div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Company name" className="sm:col-span-2">
+                <input required value={form.debtorCompany} onChange={set("debtorCompany")} placeholder="Acme Builders Inc." className={inputCls} />
+              </Field>
+              <Field label="Contact name">
+                <input required value={form.debtorContact} onChange={set("debtorContact")} placeholder="Jordan Lee" className={inputCls} />
+              </Field>
+              <Field label="Contact email">
+                <input required type="email" value={form.debtorEmail} onChange={set("debtorEmail")} placeholder="ap@acmebuilders.com" className={inputCls} />
+              </Field>
+            </div>
+          </section>
 
-          <textarea
-            rows={6}
-            value={rawText}
-            onChange={(e) => setRawText(e.target.value)}
-            className="w-full rounded border border-[#b4c1c8] bg-[#f9fbfb] p-3 font-mono-num text-xs text-[#0f2233] focus:border-[#3a6ea5] focus:outline-none"
-            placeholder="Paste invoice details, debtor company, amount, days overdue..."
-          />
+          <section>
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Invoice</h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Invoice number">
+                <input required value={form.invoiceNumber} onChange={set("invoiceNumber")} placeholder="INV-2026-0001" className={`${inputCls} font-mono-num`} />
+              </Field>
+              <Field label="PO number" hint="(optional)">
+                <input value={form.poNumber} onChange={set("poNumber")} placeholder="PO-1234" className={`${inputCls} font-mono-num`} />
+              </Field>
+              <Field label="Amount owed">
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>
+                  <input required type="number" min="1" step="0.01" value={form.amount} onChange={set("amount")} placeholder="12,500.00" className={`${inputCls} pl-7 tabular-nums`} />
+                </div>
+              </Field>
+              <Field label="Days overdue">
+                <input required type="number" min="1" step="1" value={form.daysOverdue} onChange={set("daysOverdue")} placeholder="45" className={`${inputCls} tabular-nums`} />
+              </Field>
+              <Field label="What was delivered" hint="(optional)" className="sm:col-span-2">
+                <textarea rows={2} value={form.lineItemsSummary} onChange={set("lineItemsSummary")} placeholder="e.g. 40 steel beams delivered to the Oak St. site" className={inputCls} />
+              </Field>
+            </div>
+          </section>
 
           {error && (
-            <div className="rounded border border-[#a8392d] bg-[#fbeeec] px-3 py-2 text-xs text-[#8a2e25]">
-              {error}
-            </div>
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded border border-[#b4c1c8] px-4 py-2 text-sm font-medium text-[#3c4c57] hover:bg-[#f4f6f7]"
-            >
+          <div className="flex items-center justify-end gap-2 border-t border-neutral-100 pt-5">
+            <button type="button" onClick={close} className="rounded-lg px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100">
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded bg-[#2f8a5b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d5e3c] disabled:opacity-60"
+              className="rounded-lg bg-[#111111] px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-60"
             >
-              <Sparkles className="h-4 w-4" />
-              {loading ? "Extracting & Spawning Agent..." : "Extract & Spawn DebtorAgent"}
+              {loading ? "Adding…" : "Add invoice"}
             </button>
           </div>
         </form>

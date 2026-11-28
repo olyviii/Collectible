@@ -2,27 +2,31 @@
 
 @layer base {
   :root {
-    font-family: "Barlow", ui-sans-serif, system-ui, sans-serif;
-    font-feature-settings: "tnum" 1;
-    color: #0f2233;
-    background-color: #f4f6f5;
+    font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    color: #171717;
+    background-color: #ffffff;
+    -webkit-font-smoothing: antialiased;
   }
 
   body {
     margin: 0;
-    background-color: #f4f6f5;
-    color: #0f2233;
+    background-color: #ffffff;
+    color: #171717;
   }
 }
 
-.font-condensed {
-  font-family: "Barlow Semi Condensed", "Barlow", ui-sans-serif, sans-serif;
-  letter-spacing: 0.06em;
+/* Headings, big figures and the wordmark */
+.font-display {
+  font-family: "Fraunces", Georgia, "Times New Roman", serif;
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
 }
 
+/* Invoice numbers, PO numbers and other reference codes */
 .font-mono-num {
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: "JetBBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 .tabular-nums {
